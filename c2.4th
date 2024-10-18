@@ -1,0 +1,310 @@
+/* C2 6-FEB-86
+HEX
+$L-
+
+: INSYMBOL
+  INSYMBOL
+TRACE @ 2 AND
+IF
+ ." Insymbol(" SY@ .X OP@ .X
+ ." )" SP .X CRLF
+FI
+;
+
+: .@ + @ ;
+: .! + ! ;
+: . + ;
+
+DECIMAL
+
+: STRNCPY
+  0 DO OVER @B OVER !B
+  1 + SWAP 1 + SWAP LOOP
+  DROP DROP
+;
+
+
+2 VARIABLE NEXTLAB
+0 NEXTLAB !
+
+FUNCTION GIVELABEL
+  NEXTLAB @
+  1 NEXTLAB +!
+ ;
+
+/* SYMBOL TABLE ROUTINES
+
+PROCEDURE DISTREE ( T )
+LOCAL POINTER T1 ;
+WHILE
+  T @ NIL = EXIT
+  (( DISTREE R T @ .@ ))
+  L T @ .@ T1 !
+  T @ DISPOSE
+  T1 @ T !
+WEND ;
+
+PROCEDURE DISSYMTAB ( T )
+LOCAL POINTER T1 ;
+WHILE
+  T @ NIL = EXIT
+  (( DISTREE TREE T @ .@ ))
+  NEXTLEVEL T @ .@ T1 !
+  T @ DISPOSE
+  T1 @ T !
+WEND ;
+
+PROCEDURE NEWSYMTAB ( CURREnT )
+LOSAL POINTER T ;
+TRACE @ 4 AND
+IF
+ ." Newsymtab " CURRENT @ .X CRLF
+FI
+SYMBOLTABLE NEW DUP T !
+0 OVER AUTOSIZE .!
+NIL OVER TREE .!
+NIL SWAP NEXTLEVEL .!
+(( DISSYMTAB NEXTLEVEL
+   CURRENT @@ .@ ))
+CURRENT @@ LASTLEVEL T @ .!
+T @ NEXTLEVEL CURRENT @@ .!
+T @ CURRENT @!
+AUTOSIZE CURRENT @@ .@
+SWITCHLEV CURRENT @@ .!
+2 AUTOSIZE LASTLEVEL
+CURRENT @@ .@ .@ + AUTOSIZE
+CURRENT @@ .!
+TRACE @ 4 AND
+IF
+ ." RETURNED " CURRENT @ .X CRLF
+FI
+;
+
+FUNCTION SIZEOFTYPE ( INN )
+INN @ DUP 0 <= SWAp TYPETABSIZE
+> OR
+IF
+  0 ." SIZEOFTYPE: INN= " INN .X
+ELSE
+  INN @ TYPERECORD * TYPETAB +
+  BASICTYPE .@ DUP FIELD =
+  IF
+    DROP INTEGER
+  ELSE
+    pointer =
+    IF
+      POINTER
+    ELSE
+      SIZE INN @ TYPERECORD *
+      TYPETAB + .@
+    FI
+  FI
+FI ;
+
+PROCEDURE NEXTSYMBOL ( S ECODE )
+TRACE @ 2 AND
+IF
+  ." Nextsymbol " CRLF
+FI
+  SY@ S @ =
+  IF INSYMBOL
+  ELSE ECODE @ CERROR
+  FI
+;
+
+FUNCTION FINDID ( T ID )
+LABEL FOUND
+WHILE
+TRACE @ 8 AND
+IF
+ ." Findid: " T @ .X
+ T @ DUP
+ IF NAME + .S
+ ELSE ." ..." DROP
+ FI
+ ' : .B ID @ .S CRLF
+FI
+  T @ NOT EXIT
+  T @ NAME + ID @ $=
+  DUP NOT IF DROP GOTO FOUND FI
+  0> IF T @ 2+@ T !
+     ELSE T @@ T !
+     FI
+WEND
+*** FOUND
+T @
+TRACE @ 8 AND
+IF
+ ." Findid RET=" DUP .X CRLF
+FI
+;
+
+
+
+/* FUNCTION ISDEFINED
+/* ( G,ID, VAR POSITION, VAR STATE,
+/*    VAR MODE, VAR T):BOOLEAN
+
+FUNCTION ISDEFINED
+       ( G ID  POSITION
+       STATE MODE T )
+LOCAL 2 T1 ;
+
+0 POSITION @!
+UNDEFINED STATE @!
+0 MODE @!
+0  /* TOP OF STACK = RESULT
+(( FINDID G @ TREE .@ # ID @ ))
+DUP T1 !
+IF T1 @
+   OFFSET OVER .@ POSITION @!
+   THISMODE OVER .@ MODE @!
+   THISSTATE OVER .@ STATE @!
+   DROP
+   DROP 1
+ELSE G @ LASTLEVEL .@
+   IF DROP
+     (( ISDEFINED G @
+        LASTLEVEL .@ #
+        ID @ # POSITION @ #
+        STATE @ # MODE @ # T1 ))
+   FI
+FI
+T1 @ T @!
+;
+
+PROCEDURE PUTINTREE ( G1 T1 )
+LOCAL 2 LOOK 2 G ALFA ID 2 T ;
+T1 @@ T !
+G1 @@ G !
+T @ NAME + ID ALFA STRNCPY
+1 LOOK !
+G @ NOT
+IF T @ G1 @!
+ELSE WHILE
+       LOOK @ NOT EXIT
+       ID G @ NAME + $=
+       DUP NOT
+       IF /* THEY ARE THE SAME
+         DROP 0 LOOK !
+       ELSE
+         0>
+         IF G @@ NOT
+           IF T @ G @!
+             0 LOOK !
+           ELSE
+             G @@ G !
+           FI
+         ELSE
+           G @ 2+@ NOT
+           IF T @ G @ 2+!
+             0 LOOK !
+           ELSE
+             G @ 2+@ G !
+           FI
+         FI
+       FI
+     WEND
+  FI
+;
+
+
+
+
+FUNCTION PUTINSYMBOLTABLE ( G
+              IT ISTATE IMODE )
+LOCAL 2 T 2 T1 ;
+TRACE @ 8 AND
+IF
+." Putinsym " G @ .X ID @ .S CRLF
+."          " ISTATE @ .X IMODE @ .X CRLF
+FI
+
+G @@ NOT
+IF
+  SYMBOLTABLE NEW DUP G @!
+  0 OVER AUTOSIZE .!
+  NIL OVER TREE .!
+  NIL OVER LASTLEVEL .!
+  NIL SWAP NEXTLEVEL .!
+FI
+/* MACRO EXPAND OF FILL
+TREERECORD NEW DUP T !
+NIL OVER L .!
+NIL OVER R .!
+ID @ OVER NAME  .
+ALFA STRNCPY
+ISTATE @@
+CASE
+  [ STATICVAR ]
+  [ PARAMVAR ]
+  [ AUTOVAR ]
+    G @@ AUTOSIZE .@ OVER
+      OFFSET + !
+      (( SIZEOFTYPE IMODE @ )-
+      G @@ AUTOSIZE + +!
+      BREAK
+  [ DUP ]
+    0 OVER OFFSET + !
+ESAC
+ISTATE @ OVER THISSTATE  .!
+IMODE @ OVER THISMODE  .!
+(( PUTINTREE G @@ TREE + #
+             T  ))
+TRACE @ ( AND
+IF
+." Putinsymboltable RET=" DUP .X CRLF
+DUP 16 + OVER TAB
+FI
+;
+
+
+
+
+PROCEDURE SKIP ( SY1 )
+  WHILE
+    SY1 @ SY@ =
+    SY@ EOSSYM - OR EXID
+    INSYMBOL
+  WEND
+;
+
+FUNCTION ABSDECLAR
+  ." ABSDECLAR" CRLF
+  0
+;
+
+FUNCTION EVALEXPRESSIONTREE
+LOCAL 2 TY ;
+(( TYPETREE BRACKeTS )) TY !
+BRACKETS @ NOT
+IF 0
+ELSE BRACKETS @ TOKN .@
+     KONSTANT =
+     IF BRACKETS @ SVALUE .@
+     ELSE 0
+        84 CERROR
+     FI
+FI
+TRACE @ 10 AND
+IF ." EVAL EXPRESSION TREE" CRLF
+   (( PRTTREE BRACKETS @ # 1 )) CRLF
+FI
+(( DISCARD BRACKETS @ ))
+BRACKETS 0!
+0 BRACKETS 2+!
+LEVEL 0!
+LASTNODE 0!
+0 LASTNODE 2+!
+;
+
+PROCEDURE KONSTEXP
+(( EXP ))
+(( EVALEXPRESSIONTREE )) VAL !
+;
+
+
+$L+
+SMLOAD "TYPES"
+
+

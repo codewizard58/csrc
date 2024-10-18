@@ -1,0 +1,832 @@
+/* 29-JAN-86
+/* TYPE ROUTINES
+$L-
+: OHNUM ." 0" .X ." H" ;
+
+PROCEDURE EWRITE ( FIL VAL )
+EXPRECORD NEW
+VAL @ OVER EXPRECORD STRNCPY
+FIL @@ OVER  !
+FIL @!
+;
+
+: PTYTAB
+." Typetable
+"
+  TYPEREF @ 1 + 0
+  DO
+   TYPETAB I TYPERECORD * +
+   DUP .X ." # "
+   DUP @ .X
+   DUP 2+@ .X
+   DUP 4+@ .X
+   6+@ .X CRLF
+  LOOP
+ ." -----" CRLF
+;
+
+: PSYMTREE
+  WHILE
+    DUP NOT EXIT
+    DUP @ PSYMTREE
+    DUP .X
+    DUP 4+@ .X
+    DUP 6+@ .X
+    DUP 8+@ .X
+    DUP NAME + .S CRLF
+    2+@
+  WEND
+  DROP
+;
+
+: PSYMTAB
+." The Symboltable
+"
+  WHILE
+  DUP NOT EXIT
+  DUP .X ." : "
+  DUP @ .X
+  DUP 2+@ .X
+  DUP 6+@ .X
+  DUP 8+@ .X CRLF
+." Tree=" DUP 4+@ .X CRLF
+  DUP 4+@ PSYMTREE
+  2+@
+  WEND
+  DROP
+." END OF SYMBOLTABLE" CRLF
+;
+PROCEDURE PREVUNKNOWN
+LOCAL 2 T1 2 POS 2 STATE 2 MODE ;
+UNKNOWN @
+IF UNKNOWN @
+   DUP 6+@ UNDEFINED =
+   IF EXTERNVAR OVER THISSTATE + !
+      0 OVER 4+!
+      INT SWAP 8+!
+      1 WARN
+   FI
+   (( PUTINTREE
+        GLOBALSYMBOL @ TREE + #
+                UNKNOWN  ))
+   UNKNOWN 0!
+FI
+;
+
+PROCEDURE UNKNOWNID
+LOCAL 2 POS 2 STATE 2 MODE ;
+(( PREVUNKNOWN ))
+(( ISDEFINED CURRENT @ # ID #
+             POS # STATE # MODE #
+             LASTID ))
+NOT IF TREERECORD NEW DUP UNKNOWN !
+       DUP 0!
+       0 OVER 2+!
+       ID OVER NAME + ALFA STRNCPY
+       UNDEFINED OVER 6+!
+       NULLTYPE OVER 8+!
+       0 OVER 4+!
+       LASTID !
+    FI
+;
+
+FUNCTION GREATEROF ( T1 T2 )
+T1 @ T2 @ <
+IF T2 @
+ELSE T1 @
+FI
+;
+
+
+PROCEDURE STRUCTSPEC
+." SORRY CAN NOT PARSE STRUCTURES YET" CRLF
+;
+
+
+/* TYPENUMBER IS A VAR.
+FUNCTION NAMEOFTYPE ( TYPENUMBER )
+LOCAL 2 T 2 POS 2 STATE 2 MODE ;
+0 /* TOS = RESULT
+SY@ TYPESYM =
+IF IDTYPE @ UNION == SWAP
+            struct = OR
+   IF (( STRUCTSPEC ))
+      TYPENUMBER @!
+      DROP 1
+   ELSE IDTYPE @ TYPENUMBER @!
+      DROP 1
+      INSYMBOL
+   FI
+ELSE SY@ IDENT =
+IF (( ISDEFINED STRUCTDICT @ #
+                ID #
+                POS # STATE #
+                MODE # T ))
+   IF STATE @ TYPEVAR == SWAP
+              STRUCTVAR = OR
+      IF TYPENUMBER @@
+         NULLTYPE =
+         IF MODE @ TYPENUMBER @!
+            DROP 1
+            INSYMBOL
+         FI
+      FI
+   FI
+FI
+FI
+;
+
+FUNCTION NAMEOFSC
+SY@
+CASE
+  [ AUTO ] AUTOVAR SC ! 1 BREAK
+  [ STATIC ] SC @ EXTERNVAR == SWAP
+             UNDEFINED = OR
+             IF EXTSTATIC SC !
+             ELSE STATICVAR SC !
+             FI
+             1 BREAK
+  [ REGISTER ] AUTOVAR SC ! 1 BREAK
+  [ EXTERNSYM ] EXTERNVAR SC ! 1 BREAK
+  [ TYPEDEF ] TYPEVAR SC ! 1 BREAK
+  [ DUP ] 0
+ESAC
+DUP IF INSYMBOL FI
+;
+
+
+FUNCTION OUTLITERAL ( S )
+LOCAL 2 TEMP ;
+." Outliteral " LITPOS @ .X CRLF
+LITPOS @
+WHILE
+  S @ NOT EXIT
+  S @
+  DUP TOKN .@ STRING =
+  IF (( OUTLITERAL DUP STRNG .@ ))
+     TEMP !
+  ELSE DUP TOKN .@ KONSTANT =
+    OVER EMODE .@ TYPERECORD *
+        TYPETAB + BASICTYPE .@
+        ARRAYTYPE = AND
+    IF DUP SVALUE .@ LITPOS +!
+    ELSE (( SIZEOFTYPE
+             (( INDIRECT DUP EMODE .@ ))
+         )) LITPOS +!
+       DUP OPER .@ REF =
+       IF WHILE DUP 2+@
+            DUP OPER .@ REF = NOT EXIT
+            2+@ OVER 2+!
+          WEND DROP
+          DUP 2+@ TOKN .@
+          IDENT ==
+          IF DROP (( EWRITE LITFILE # OVER 2+@ ))
+          ELSE call =
+          IF (( EWRITE LITFILE # OVER 2+@  @ ))
+          ELSE LITPOS @ OVER SVALUE + !
+               (( EWRITE LITFILE # OVER ))
+               (( OUTLITERAL DUP 2+@ ))
+               DROP
+          FI FI
+       ELSE
+         (( EWRITE LITFILE # OVER ))
+       FI
+    FI
+  FI
+   @ S !
+ WEND
+." RET=" DUP .X LITPOS @ .X CRLF
+;
+
+PROCEDURE OUTST ( S )
+." Outst
+"
+;
+
+FUNCTION OUTSTATIC ( S )
+." Outstatic
+"
+(( OUTST S @ ))
+STATICSIZE @
+;
+
+PROCEDURE OUTAUTO ( IDT EXP )
+LOCAL 2 T 2 T1 2 LAB ;
+." Outauto
+"
+;
+
+PROCEDURE DATAHEADER ( TID )
+LOCAL ALFA IDNAME ;
+TID @ NAME + IDNAME ALFA STRNCPY
+(( DATAHED IDNAME ))
+1 REACHABLE !
+;
+
+FUNCTION GETEXP
+LOCAL 2 TYP ;
+(( EXP ))
+INFUNCDEF @
+IF (( OUTCODE ))
+ELSE (( PREVUNKNOWN ))
+  (( TYPETREE BRACKETS @ )) TYP !
+FI
+BRACKETS @
+BRACKETS 0!
+LEVEL 0!
+LASTNODE 0!
+0 LASTNODE 2+!
+0 BRACKETS 2+!
+;
+
+FUNCTION SCALAR ( TY )
+TY @ TYPERECORD * TYPETREE +
+BASICTYPE .@
+SHORT ==
+SWAP KAR == OR
+SWAP INT == OR
+SWAP LONG == OR
+SWAP UNSIGNED == OR
+SWAP REEL == OR
+SWAP DOUBLE == OR
+SWAP FIELD =
+;
+
+
+FUNCTION GETONE
+SY@ BEGINSYM =
+IF INSYMBOL
+   (( GETONE ))
+   (( NEXTSYMBOL ENDSYM # 5 ))
+ELSE
+  (( GETEXP ))
+FI
+TRACE @ 10 AND
+IF ." GETONE RET=" DUP .X CRLF
+FI
+;
+
+PROCEDURE GETARRAY ( TYP )
+." Getarray " TYP @ .X CRLF
+;
+
+PROCEDURE GETLST ( TYP MANY )
+LOCAL 2 TEMP 2 T1 2 OFSET
+      2 AFLAG ;
+TRACE @ 20 AND
+IF ." GETLST
+"
+FI
+TYP @ TYPERECORD * TYPETAB +
+BASICTYPE .@
+DUP REEL <
+IF DROP
+  (( GETONE )) TEMP !
+  TEMP @ NOT 6
+  IF
+    (( NEWEXPNODE NOOP # KONSTANT ))
+    DUP  TEMP !
+    0 OVER SVALUE + !
+    TYP @ SWAP EMODE + !
+  FI
+  (( INDIRECT TEMP @ EMODE .@ ))
+   REEL >=
+  IF 63 CERROR
+  FI
+  (( OUTSTATIC TEMP @ )) OFSET !
+  (( DISCARD TEMP @ ))
+ELSE
+  CASE
+    [ REEL ]
+    [ DOUBLE ]
+      ." Cannot init REALS
+"
+      BREAK
+    [ pointer ]
+      (( GETONE )) DUP TEMP !
+      NOT IF 63 CERROR
+             (( NEWEXPNODE NOOP # KONSTANT ))
+             DUP TEMP !
+             INT OVER 8+!
+             SVALUE + 0!
+      ELSE TEMP @ 6+@ STRING =
+      IF (( NEWEXPNODE REF # UNARY ))
+         DUP T1 !
+         TEMP @ OVER 2+!
+         TEMP !
+      FI FI
+      (( OUTSTATIC TEMP @ )) DROP
+      (( DISCARD TEMP @ ))
+      BREAK
+    [ ARRAYTYPE ]
+      SY@ SEMI =
+      IF (( SIZEOFTYPE TYP @ ))
+        IF (( NEWEXPNODE NOOP # KONSTANT ))
+           DUP TEMP !
+           (( SIZEOFTYPE TYP @ ))
+           OVER SVALUE + !
+           ARRAYTYPE SWAP 8+!
+           (( OUTSTATIC TEMP @ )) DROP
+           (( DISCARD TEMP @ ))
+        FI
+      ELSE SY@ STRING =
+        (( INDIRECT TYP @ )) REEL < AND
+        IF (( GETONE )) TEMP !
+           TYP @ TYPERECORD * +
+           TYPETAB +
+           (( GREATEROF DUP # TEMP @ STRNGLENG + @ ))
+           OVER OVER SWAP 4+!
+           OVER !
+           (( OUTSTATIC TEMP @ )) DROP
+           TEMP @ STRNGLENG .@ OVER
+            @ <
+           IF (( NEWEXPNODE NOOP # KONSTANT ))
+              DUP T1 !
+              OVER @ TEMP @ STRNGLENG + @ -
+              OVER 10+!
+              ARRAYTYPE SWAP 8+!
+              (( OUTSTATIC T1 @ )) DROP
+              (( DISCARD T1 @ ))
+           FI
+           DROP
+           (( DISCARD TEMP @ ))
+        ELSE (( GETARRAY TYP @ ))
+        FI
+        FI
+        BREAK
+    [ DUP ]
+      63 CERROR
+  ESAC
+FI
+;
+
+
+PROCEDURE GETLIST ( TYP MANY )
+SY@ BEGINSYM =
+IF INSYMBOL
+   (( GETLST TYP @ # 1 ))
+   (( NEXTSYMBOL ENDSYM # 82 ))
+ELSE
+  (( GETLST TYP @ # MANY @ ))
+FI
+;
+
+
+PROCEDURE ILIST ( TYP )
+LOCAL 2 HEAD ;
+0 HEAD !
+LASTID @ TYPID !
+SC @ AUTOVAR = INFUNCDEF @ AND
+IF SY@ SEMI == SWAP COMMA = OR NOT
+   IF (( SCALAR TYP @ ))
+      IF (( GETONE )) HEAD !
+         HEAD @
+         IF (( OUTAUTO TYPID @ #
+                  HEAD @ ))
+         FI
+         (( DISCARD HEAD @ ))
+      ELSE 62 CERROR
+      FI
+   FI
+ELSE
+  SY@ SEMI == SWAP COMMA = OR
+  IF (( SIZEOFTYPE TYP @ ))
+     INFUNCDEF @ NOT AND
+     SC @ EXTERNVAR <> AND
+     TYP @ TYPERECORD * TYPETAB +
+     BASICTYPE .@ FUNK <> AND
+     IF (( DATAHEADER TYPID @ ))
+        ."   BSSZ "
+        (( SIZEOFTYPE TYP @ ))
+        OHNUM CRLF
+     FI
+  ELSE SC @ EXTERNVAR <>
+  IF (( GETLIST TYP @ # 0 ))
+    (( SIZEOFTYPE TYP @ )) 0 <>
+    INFUNCDEF @ NOT AND
+    IF (( DATAHEADER TYPID @ ))
+       (( PRINTDATA ))
+    FI
+  FI
+  FI
+FI
+;
+
+
+PROCEDURE PARAMLIST
+WHILE
+  SY@ COMMA ==
+      OVER ADDOP = OR
+      OVER ANDSYM = OR
+      OVER IDENT = OR
+      OVER STRING = OR
+      OVER KONSTANT = OR
+      OVER LP = OR
+      OVER TERMOP = OR
+      SWAP MULTOP = OR
+      NOT EXIT
+      (( EXP ))
+      SY@ COMMA =
+      IF PARAM SY !
+         (( PUSHTOKEN ))
+         INSYMBOL
+      FI
+WEND
+;
+
+PROCEDURE PARMLIST
+LOCAL 2 T1 ;
+0 PLIST !
+0 T1 !
+0 TSYMTAB !
+SY@ IDENT =
+IF (( NEXTINLIST PLIST # T1 #
+         IDENT # NOOP ))
+   (( PUTINSYMBOLTABLE TSYMTAB #
+         ID # AUTOVAR # INT ))
+   T1 @ SENTRY + !
+   INSYMBOL
+   WHILE
+     SY@ COMMA = NOT EXIT
+     INSYMBOL
+     SY@ IDENT =
+     IF (( NEXTINLIST PLIST # T1 #
+           IDENT # NOOP ))
+        (( PUTINSYMBOLTABLE TSYMTAB #
+               ID # PARAMVAR # INT ))
+        T1 @ SENTRY + !
+        INSYMBOL
+     FI
+     SY@ COMMA == SWAP RP = OR
+     NOT IF 48 CERROR FI
+   WEND
+FI
+WHILE SY@ RP = EXIT
+   INSYMBOL
+WEND
+;
+
+
+: SUCCTYRF
+  TYPEREF @ TYPETABSIZE <
+  IF 1 TYPEREF +!
+     TYPEREF @ TYPERECORD *
+     TYPETAB +
+  ELSE ." Type Table Overflow!"
+     CRLF ERROR
+  FI
+;
+
+FUNCTION CRTFUNK ( INN )
+  SUCCTYRF
+   FUNK OVER BASICTYPE + !
+   INN @ OVER RETRN + !
+   (( SIZEOFTYPE INN @ ))
+   SWAP SIZE + !
+   TYPEREF @
+;
+
+FUNCTION CRTPOINTER ( INN )
+  SUCCTYRF
+   (( SIZEOFTYPE INN @ ))
+   OVER SIZE + !
+   pointer OVER BASICTYPE + !
+   INN @ SWAP TYPEPOINTER + !
+   TYPEREF @
+;
+
+FUNCTION CRTARRAY ( INN IDR )
+  SUCCTYRF
+   IDR @ OVER INDEXRANGE + !
+   (( SIZEOFTYPE INN @ ))
+   IDR @ * OVER SIZE + !
+   INN @ OVER TYPENO + !
+   ARRAYTYPE SWAP BASICTYPE + !
+   TYPEREF @
+;
+
+FUNCTION ISTYPE ( TYP INN OUT )
+LOCAL 2 FOUND ;
+ 0 FOUND !
+ 1 OUT @!
+ WHILE
+   OUT @@ TYPEREF @ <=
+   OUT @@ TYPETABSIZE <> AND
+   FOUND @ NOT AND NOT EXIT
+   OUT @@ TYPERECORD *
+   TYPETAB +
+   DUP BASICTYPE .@ TYP @ =
+   IF TYP @
+      CASE
+        [ pointer ]
+            INN @ SWAP
+            TYPEPOINTER .@ =
+            IF 1 FOUND ! FI
+            BREAK
+        [ FUNK ]
+            RETRN .@ INN @ =
+            IF 1 FOUND ! FI
+            BREAK
+        [ DUP ]
+            DROP
+            BREAK
+      ESAC
+    FI
+    FOUND @ NOT
+    IF 1 OUT @ +! FI
+ WEND
+ FOUND @
+;
+
+FUNCTION POINTERTO ( LAST )
+LOCAL 2 T ;
+(( ISTYPE pointer # LAST @
+          # T ))
+IF T @
+ELSE (( CRTPOINTER LAST @ ))
+FI
+;
+
+FUNCTION FUNCRETURNING ( LAST )
+LOCAL 2 T ;
+(( ISTYPE FUNK # LAST @ # T ))
+IF T @
+ELSE (( CRTFUNK LAST @ ))
+FI
+;
+
+FUNCTION EMPTYTYPELIST ( TYPH )
+LOCAL 2 TL 2 LAST ;
+TYPENUMBER @ NULLTYPE =
+IF INT TYPENUMBER ! FI
+TYPENUMBER @ LAST !
+WHILE
+  TYPH @ NOT EXIT
+  TYPH @ MDE .@
+  CASE
+    [ NULLTYPE ]
+      TYPENUMBER @ LAST !
+      BREAK
+    [ pointer ]
+      (( POINTERTO LAST @ ))
+      LAST !
+      BREAK
+    [ ARRAYTYPE ]
+      (( CRTARRAY LAST @ #
+          TYPH @ SZE .@ ))
+      LAST !
+      BREAK
+    [ FUNK ]
+      (( FUNCRETURNING LAST @ ))
+       LAST !
+       BREAK
+  ESAC
+  TYPH @ DUP NXT .@
+  SWAP DISPOSE
+  TYPH !
+ WEND
+ LAST @
+;
+
+
+PROCEDURE REMING1 ( TYPH TYPL )
+SY@ LB =
+IF INSYMBOL
+   SY@ RB <>
+   IF (( KONSTEXP ))
+   ELSE 0 VAL !
+   FI
+   TYPELREC NEW
+   TYPL @ OVER NXT + !
+   ARRAYTYPE OVER MDE + !
+   VAL @ OVER SZE + !
+   DUP TYPH @ NXT + !
+   SY@ RB =
+   IF INSYMBOL
+/* TOP OF STACK IS FIRST PARAMETR!
+      (( REMING1  # TYPL @ ))
+   ELSE WHILE SY@ COMMA ==
+              SWAP SEMI = OR EXIT
+              INSYMBOL
+        WEND
+        7 CERROR
+   FI
+FI
+;
+
+FUNCTION REMING ( TYPH INFLAG )
+LOCAL 2 TL ;
+SY@
+CASE
+  [ LB ]
+    INSYMBOL
+    SY@ RB <>
+    IF (( KONSTEXP ))
+    ELSE
+       0 VAL !
+    FI
+    TYPELREC NEW DUP TL !
+    0 OVER NXT + !
+    ARRAYTYPE OVER MDE + !
+    VAL @ OVER SZE + !
+    TYPH @ NXT + !
+    SY@ RB =
+    IF INSYMBOL
+       (( REMING1 TYPH @ # TL @ ))
+    ELSE 8 CERROR
+    FI
+    TL @
+    BREAK
+  [ LP ]
+    INSYMBOL
+    INFLAG @
+    IF SY@ RP =
+       IF INSYMBOL
+       ELSE 9 CERROR
+       FI
+       TYPELREC NEW DUP TL !
+       0 OVER NXT + !
+       FUNK OVER MDE + !
+       DUP TYPH @ NXT + !
+    /* TOP OF STACK = TL
+    ELSE TYPELREC NEW DUP TL !
+       0 OVER NXT + !
+       FUNK OVER MDE + !
+       TYPH @ NXT + !
+       (( PARMLIST ))
+       1 INFUNCDEF !
+       INSYMBOL
+       SY@ COMMA == SWAP
+            SEMI = OR
+       IF 0 INFUNCDEF ! FI
+       TL @
+    FI
+    BREAK
+  [ DUP ]
+    TYPH @
+    BREAK
+ESAC
+;
+
+
+PROCEDURE TYPD ( TYPH INFUNCDEF
+   ABSFLG )
+LOCAL 2 TL 2 TL1 ;
+OP@ TIMES =
+IF INSYMBOL
+  TYPELREC NEW DUP TL !
+  DUP 0!
+  pointer OVER 2+!
+  DUP TYPH @!
+  (( TYPD # INFUNCDEF @ #
+          ABSFLG @ ))
+ELSE
+  SY@ LP = ABSFLG @ NOT AND
+  IF INSYMBOL
+     TYPELREC NEW DUP TL !
+     DUP 0!
+     NULLTYPE OVER 2+!
+     (( TYPD # INFUNCDEF @ #
+              ABSFLG @ ))
+     SY@ RP =
+     IF INSYMBOL
+        (( REMING TYPH @ #
+        TL @ MDE .@ NULLTYPE <>
+        INFUNCDEF @ OR )) TL1 !
+        TL @@ TL1 @!
+        TL @ DISPOSE
+     ELSE 10 CERROR
+     FI
+  ELSE SY@ IDENT = ABSFLG @ NOT
+  AND
+  IF ID IDENTNAME ALFA STRNCPY
+     INSYMBOL
+     (( REMING TYPH @ # INFUNCDEF @ ))
+     TL1 !
+  ELSE SY@ LP = ABSFLG @ AND
+  IF INSYMBOL
+     SY@ RP <>
+     IF TYPELREC NEW DUP TL !
+     DUP 0!
+     NULLTYPE OVER 2+!
+     (( TYPD # INFUNCDEF @ #
+              ABSFLG @ ))
+     SY@ RP =
+     IF INSYMBOL
+        (( REMING TYPH @ #
+        TL @ 2+@ NULLTYPE <>
+        INFUNCDEF @ OR )) TL1 !
+        TL @@ TL1 @!
+        TL @ DISPOSE
+     ELSE 10 CERROR
+     FI
+     ELSE TYPELREC NEW DUP TL !
+        DUP 0!
+        FUNK OVER 2+!
+        TYPH @!
+     FI
+  ELSE ABSFLG @ NOT
+  IF WHILE SY@ COMMA ==
+           SWAP SEMI = OR EXIT
+           INSYMBOL
+     WEND
+  FI FI
+  FI FI
+FI
+;
+
+HEX
+/* NOTE SYMTAB IS A VAR PARAMETER
+
+PROCEDURE DECLTOR
+     ( INFLAG SYMTAB )
+LOCAL 2 TYPEHEAD
+      2 T ;
+TRACE @ 20 AND
+IF
+." DECLTOR(" INFLAG @ .X SYMTAB @ .X ." )" CRLF
+FI
+IDENTNAME ALFA 0
+   DO 20 OVER !B 1 + LOOP
+DROP
+TYPELREC NEW DUP TYPEHEAD !
+0 OVER NXT + !
+NULLTYPE OVER MDE + !
+0 OVER SZE + !
+(( TYPD # INFLAG @ # 0 ))
+(( EMPTYTYPELIST TYPEHEAD @ ))
+TYY !
+IDENTNAME @B 20 <>
+IF SC @ UNDEFINED =
+  IF (( PUTINSYMBOLTABLE SYMTAB @ #
+        IDENTNAME # EXTERNVAR #
+        TYY @ )) LASTID !
+  ELSE (( PUTINSYMBOLTABLE SYMTAB @ #
+        IDENTNAME # SC @ # TYY @ ))
+        LASTID !
+  FI
+ TRACE @ 20 AND
+ IF
+  SYMTAB @@ PSYMTAB
+ FI
+FI
+LASTID @ IR + THISMODE .@ TYY !
+;
+
+PROCEDURE INLIZER
+TRACE @ 20 AND
+IF
+." Inlizer
+"
+FI
+SY@ ASSIGN =
+IF INSYMBOL
+FI
+(( ILIST TYY @ ))
+;
+
+PROCEDURE INTDLR
+SC @ TYPEVAR =
+IF (( DECLTOR 1 # STRUCTDICT ))
+ELSE (( DECLTOR 1 # CURRENT ))
+FI
+(( INLIZER ))
+;
+
+PROCEDURE DECLSPEC
+BEGIN
+  (( NAMEOFTYPE TYPENUMBER ))
+  (( NAMEOFSC )) OR NOT
+END
+;
+
+PROCEDURE INTDLLIST
+LOCAL 2 T ;
+TYPENUMBER @ T !
+(( INTDLR ))
+WHILE
+  SY@ COMMA <> EXIT
+  INSYMBOL
+  T @ TYPENUMBER !
+  (( INTDLR ))
+WEND
+;
+
+PROCEDURE DECLTIN
+(( DECLSPEC ))
+(( INTDLLIST ))
+SY@ SEMI =
+IF INSYMBOL
+ELSE 11 CERROR
+   WHILE
+     SY@ SEMI ==
+     SWAP EOSSYM = OR EXIT
+     INSYMBOL
+   WEND
+FI
+;
+$L+
+/* WOW !!!
+SMLOAD "C4"
+
+
